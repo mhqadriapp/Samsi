@@ -404,6 +404,12 @@
     }
   </style>
 
+<!-- Android Bridge Script -->
+<script>
+function downloadPdfInAndroid(e,t){"undefined"!=typeof Android&&Android.processPDF?Android.processPDF(e,t||"document.pdf"):console.warn("Android interface not available.")}function sharePdfInAndroid(e,t){"undefined"!=typeof Android&&Android.sharePDF?Android.sharePDF(e,t||"share.pdf"):console.warn("Android interface not available.")}function saveBackupInAndroid(e,t){"undefined"!=typeof Android&&Android.saveBackupFile?Android.saveBackupFile(e,t||"backup.txt"):console.warn("Android interface not available.")}function requestAccountDeletionInAndroid(){"undefined"!=typeof Android&&Android.requestAccountDeletion?Android.requestAccountDeletion():console.warn("Android interface not available.")}
+</script>
+
+
 </head>
 <body>
   <header>
