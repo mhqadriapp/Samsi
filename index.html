@@ -544,7 +544,6 @@ body { padding-top: 75px; }
             } catch (error) { 
                 console.error("Error processing data:", error); 
                 alert("An error occurred while loading your data."); 
-                loadingIndicator.textContent = "डेटा लोड करने में त्रुटि हुई।";
             }
         }
 
@@ -612,15 +611,12 @@ body { padding-top: 75px; }
             updates[`/accountProfiles/${name}`] = profileData;
             if (!clientFiles[name]) updates[`/clientFiles/${name}`] = [];
         
-            // Trigger the update. Firebase SDK handles offline mode automatically.
-            // The global on('value') listener will update the UI.
             userRef.update(updates).catch(e => {
                 alert("Error saving profile: " + e.message);
             });
             
-            // Close the modal and inform the user.
             alert("प्रोफ़ाइल सेव कर दी गई है। यह स्वचालित रूप से सिंक हो जाएगी।");
-            selectClientFile(name); // Select the new profile in the UI
+            selectClientFile(name); 
             closeModal('profileModal');
         }
 
@@ -659,13 +655,10 @@ body { padding-top: 75px; }
             currentEntries.push(newCard);
             const updates = { [`/clientFiles/${currentClientFile}`]: currentEntries, '/cardCounter': newCardCounter };
         
-            // Trigger the update. Firebase SDK handles offline mode automatically.
-            // The global on('value') listener will update the UI.
             userRef.update(updates).catch(e => {
                 alert("Error adding entry: " + e.message);
             });
             
-            // Close the modal and inform the user.
             alert('एंट्री सबमिट हो गई है। यह स्वचालित रूप से सिंक हो जाएगी।');
             closeModal('entryModal');
         }
@@ -710,7 +703,7 @@ body { padding-top: 75px; }
             if (buttons) buttons.style.display = 'none';
 
             const printableCard = document.createElement('div');
-            printableCard.style.cssText = 'position: absolute; left: -9999px; width: 1000px; background: white;';
+            printableCard.style.cssText = 'position: absolute; left: -9999px; left: -9999px; width: 1000px; background: white;';
             printableCard.innerHTML = card.outerHTML;
             document.body.appendChild(printableCard);
 
@@ -762,46 +755,76 @@ body { padding-top: 75px; }
 
         function openShareModal(pdfInstance, pdfBlob, fileName, customerMobile) {
             const modal = document.getElementById('shareModal');
-            
-            document.getElementById('downloadPdfBtn').onclick = () => {
-                pdfInstance.save(fileName);
-                closeModal('shareModal');
-            };
-            
-            document.getElementById('printPdfBtn').onclick = () => {
-                try {
-                    pdfInstance.autoPrint();
-                    window.open(pdfInstance.output('bloburl'), '_blank');
-                } catch (e) {
-                    alert("Printing failed. Please try downloading the PDF and printing it from your computer.");
-                }
-                closeModal('shareModal');
-            };
+            const isAndroid = typeof Android !== 'undefined';
 
-            const shareEmailBtn = document.getElementById('shareEmailBtn');
-            shareEmailBtn.onclick = () => {
-                alert("कृपया पहले PDF डाउनलोड करें, फिर अपने ईमेल क्लाइंट को खोलने के लिए OK दबाएं और फ़ाइल को मैन्युअल रूप से अटैच करें।\n\nPlease download the PDF first, then press OK to open your email client and attach the file manually.");
-                const subject = encodeURIComponent(`Report for ${currentClientFile || 'your account'}`);
-                const body = encodeURIComponent("Please find the report attached.\n\nThank you,\nKhan Ka Samsi Noori Zahangir");
-                window.location.href = `mailto:?subject=${subject}&body=${body}`;
-                closeModal('shareModal');
-            };
-            
-            const shareWhatsappBtn = document.getElementById('shareWhatsappBtn');
-            const shareFile = new File([pdfBlob], fileName, { type: 'application/pdf' });
-            const shareData = { files: [shareFile], title: fileName, text: `Report for ${currentClientFile}` };
+            if (isAndroid) {
+                // Android-specific handling: Convert PDF to base64 and call Android methods
+                const base64 = pdfInstance.output('datauristring').split(',')[1]; // Get base64 without prefix
 
-            if (navigator.share && navigator.canShare({ files: [shareFile] })) {
-                shareWhatsappBtn.style.display = 'block';
-                shareWhatsappBtn.onclick = () => {
-                    if (customerMobile) {
-                        openWhatsappConfirmModal(pdfInstance, fileName, customerMobile, shareData);
-                    } else {
-                        navigator.share(shareData).then(() => closeModal('shareModal')).catch(e => console.error("Share failed", e));
-                    }
+                document.getElementById('downloadPdfBtn').onclick = () => {
+                    downloadPdfInAndroid(base64, fileName);
+                    closeModal('shareModal');
                 };
+                
+                document.getElementById('shareWhatsappBtn').onclick = () => {
+                    sharePdfInAndroid(base64, fileName);
+                    closeModal('shareModal');
+                };
+                
+                document.getElementById('printPdfBtn').onclick = () => {
+                    alert("प्रिंट के लिए PDF डाउनलोड करें और प्रिंटर से प्रिंट करें।");
+                    downloadPdfInAndroid(base64, fileName);
+                    closeModal('shareModal');
+                };
+
+                document.getElementById('shareEmailBtn').onclick = () => {
+                    alert("ईमेल के लिए PDF डाउनलोड करें और मैन्युअल रूप से ईमेल में अटैच करें।");
+                    downloadPdfInAndroid(base64, fileName);
+                    closeModal('shareModal');
+                };
+
             } else {
-                shareWhatsappBtn.style.display = 'none';
+                // Web handling (original)
+                document.getElementById('downloadPdfBtn').onclick = () => {
+                    pdfInstance.save(fileName);
+                    closeModal('shareModal');
+                };
+                
+                document.getElementById('printPdfBtn').onclick = () => {
+                    try {
+                        pdfInstance.autoPrint();
+                        window.open(pdfInstance.output('bloburl'), '_blank');
+                    } catch (e) {
+                        alert("Printing failed. Please try downloading the PDF and printing it from your computer.");
+                    }
+                    closeModal('shareModal');
+                };
+
+                const shareEmailBtn = document.getElementById('shareEmailBtn');
+                shareEmailBtn.onclick = () => {
+                    alert("कृपया पहले PDF डाउनलोड करें, फिर अपने ईमेल क्लाइंट को खोलने के लिए OK दबाएं और फ़ाइल को मैन्युअल रूप से अटैच करें।\n\nPlease download the PDF first, then press OK to open your email client and attach the file manually.");
+                    const subject = encodeURIComponent(`Report for ${currentClientFile || 'your account'}`);
+                    const body = encodeURIComponent("Please find the report attached.\n\nThank you,\nKhan Ka Samsi Noori Zahangir");
+                    window.location.href = `mailto:?subject=${subject}&body=${body}`;
+                    closeModal('shareModal');
+                };
+                
+                const shareWhatsappBtn = document.getElementById('shareWhatsappBtn');
+                const shareFile = new File([pdfBlob], fileName, { type: 'application/pdf' });
+                const shareData = { files: [shareFile], title: fileName, text: `Report for ${currentClientFile}` };
+
+                if (navigator.share && navigator.canShare({ files: [shareFile] })) {
+                    shareWhatsappBtn.style.display = 'block';
+                    shareWhatsappBtn.onclick = () => {
+                        if (customerMobile) {
+                            openWhatsappConfirmModal(pdfInstance, fileName, customerMobile, shareData);
+                        } else {
+                            navigator.share(shareData).then(() => closeModal('shareModal')).catch(e => console.error("Share failed", e));
+                        }
+                    };
+                } else {
+                    shareWhatsappBtn.style.display = 'none';
+                }
             }
             
             modal.style.display = 'flex';
@@ -836,7 +859,7 @@ body { padding-top: 75px; }
         function updateDefaultColumnsForm() { document.getElementById('defaultColumnsContainer').innerHTML = (localSettings.defaultColumns || defaultColumns).map(col => `<div class="form-group" data-field-id="default_${col.key}"><label for="default_${col.key}">${col.label}<span class="toggle-vis" onclick="toggleVisibility('default_${col.key}', event)">👁️</span></label><div class="input-wrapper" id="input-wrapper-default_${col.key}"><input type="text" id="default_${col.key}"/><button type="button" class="snippet-btn" onclick="openSnippetModal('${col.key}', 'default_${col.key}', '${col.label}')">+</button></div></div>`).join(''); }
         function updateExtraColumnsForm() { document.getElementById('extraColumnsContainer').innerHTML = extraColumns.map((colName, i) => `<div class="form-group" data-field-id="extra_col_${i}"><label for="extra_col_${i}">${colName}<span class="toggle-vis" onclick="toggleVisibility('extra_col_${i}', event)">👁️</span></label><div class="input-wrapper" id="input-wrapper-extra_col_${i}"><input type="text" id="extra_col_${i}"/><button type="button" class="snippet-btn" onclick="openSnippetModal('extra_col_${i}', 'extra_col_${i}', '${colName}')">+</button></div></div>`).join(''); }
         function toggleVisibility(inputId, event) { event?.stopPropagation(); const formGroup = document.querySelector(`[data-field-id="${inputId}"]`); if (!formGroup) return; const isVisible = formGroup.style.display !== 'none'; formGroup.style.display = isVisible ? 'none' : 'block'; const toggleButton = formGroup.querySelector('.toggle-vis'); if (toggleButton) toggleButton.textContent = isVisible ? '🙈' : '👁️'; if (!localSettings.columnVisibility) localSettings.columnVisibility = {}; localSettings.columnVisibility[inputId] = !isVisible; userRef.child('settings/columnVisibility').set(localSettings.columnVisibility); updateHiddenSummary(); }
-        function toggleAllColumns(shouldHide) { const modal = document.getElementById('entryModal'); if (!localSettings.columnVisibility) localSettings.columnVisibility = {}; modal.querySelectorAll('#entryFormFields .form-group[data-field-id]').forEach(formGroup => { const inputId = formGroup.dataset.fieldId; if (inputId !== 'entryAccountSelect') { formGroup.style.display = shouldHide ? 'none' : 'block'; const toggleButton = formGroup.querySelector('.toggle-vis'); if (toggleButton) toggleButton.textContent = shouldHide ? '🙈' : '👁️'; localSettings.columnVisibility[inputId] = shouldHide; } }); userRef.child('settings/columnVisibility').set(localSettings.columnVisibility); updateHiddenSummary(); }
+        function toggleAllColumns(shouldHide) { const modal = document.getElementById('entryModal'); if (!localSettings.columnVisibility) localSettings.columnVisibility = {}; modal.querySelectorAll('#entryFormFields .form-group[data-field-id]').forEach(group => { const inputId = group.dataset.fieldId; if (inputId !== 'entryAccountSelect') { group.style.display = shouldHide ? 'none' : 'block'; const toggleButton = group.querySelector('.toggle-vis'); if (toggleButton) toggleButton.textContent = shouldHide ? '🙈' : '👁️'; localSettings.columnVisibility[inputId] = shouldHide; } }); userRef.child('settings/columnVisibility').set(localSettings.columnVisibility); updateHiddenSummary(); }
         function applyColumnVisibility() { const visibility = localSettings.columnVisibility || {}; Object.entries(visibility).forEach(([id, isHidden]) => { const formGroup = document.querySelector(`[data-field-id="${id}"]`); if (formGroup) { formGroup.style.display = isHidden ? 'none' : 'block'; const toggleButton = formGroup.querySelector('.toggle-vis'); if (toggleButton) toggleButton.textContent = isHidden ? '🙈' : '👁️'; } }); }
         function updateHiddenSummary() { const summaryContainer = document.getElementById('hiddenFieldsSummary'), hiddenItems = []; document.querySelectorAll('#entryFormFields .form-group[data-field-id]').forEach(group => { if (group.style.display === 'none' && group.querySelector('label')) { const label = group.querySelector('label').firstChild.textContent, id = group.dataset.fieldId; hiddenItems.push({ label, id }); } }); if (hiddenItems.length > 0) { summaryContainer.innerHTML = `<h4>छिपे हुए कॉलम (क्लिक करके दिखाएँ)</h4>` + hiddenItems.map(item => `<span class="hidden-item-chip" onclick="toggleVisibility('${item.id}', event)">${item.label}</span>`).join(''); summaryContainer.style.display = 'block'; } else summaryContainer.style.display = 'none'; }
         function addMonthToDescription(selectorId, textareaId) { const selector = document.getElementById(selectorId), textarea = document.getElementById(textareaId); if (selector.value) { textarea.value += (textarea.value ? `\n` : '') + `[अवधि: ${selector.value}] इलाज चलेगा`; selector.value = ""; } }
